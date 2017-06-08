@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
+	"strings"
 )
 
 // TradeAPI allows to trade on the exchange and receive information about the account.
@@ -266,7 +266,7 @@ func (tapi *TradeAPI) RedeemCouponAuth(key string, secret string, coupon string)
 }
 
 func (tapi *TradeAPI) encodePostData(method string, params map[string]string) string {
-	nonce := time.Now().Unix()
+	nonce := int64(0) //time.Now().Unix() * 100
 	if nonce <= tapi.lastNonce {
 		nonce = tapi.lastNonce + 1
 	}
@@ -312,7 +312,18 @@ func (tapi *TradeAPI) call(method string, v interface{}, params map[string]strin
 		return err
 	}
 
-	return marshalResponse(resp, v)
+	err = marshalResponse(resp, v)
+	if err != nil {
+		fmt.Sprintf("Error marshaling response: %v\n", err)
+		v := strings.Split(err.Error(), ";")
+		if v[0] == "trading error: invalid nonce parameter" {
+			v2 := strings.Split(v[1], ":")
+			if nonce, err := strconv.ParseInt(v2[len(v2)-1], 10, 64); err == nil {
+				tapi.lastNonce = nonce
+			}
+		}
+	}
+	return err
 }
 
 func marshalResponse(resp *http.Response, v interface{}) error {
